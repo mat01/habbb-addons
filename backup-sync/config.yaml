@@ -1,5 +1,5 @@
 name: habbb backup sync
-version: "0.1.1"
+version: "0.1.2"
 slug: habbb_backup_sync
 description: Triggers full HA backups on a schedule and uploads them to the customer-scoped S3 prefix managed by habbb. Credentials are set automatically by habbb finalize.ts — no manual configuration expected.
 url: https://habbb.com

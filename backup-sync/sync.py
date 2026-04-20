@@ -75,13 +75,36 @@ def save_state(state: dict) -> None:
     os.replace(tmp, STATE_PATH)
 
 
+S6_ENV_DIRS = (
+    Path("/run/s6/container_environment"),
+    Path("/var/run/s6/container_environment"),
+)
+
+
 def supervisor_token() -> str | None:
     """
-    Supervisor injects SUPERVISOR_TOKEN into addon env when hassio_api: true.
-    Some base images / init chains have historically also exposed it as
-    HASSIO_TOKEN — check both defensively.
+    Supervisor injects SUPERVISOR_TOKEN into the addon when hassio_api: true,
+    but on s6-overlay base images the var lives in
+    /run/s6/container_environment/ and is NOT propagated to os.environ unless
+    the entrypoint is launched via /command/with-contenv. Fall back to reading
+    those files directly so sync.py works regardless of how run.sh is wired.
+
+    Also tries the legacy HASSIO_TOKEN name for older HA versions.
     """
-    return os.environ.get("SUPERVISOR_TOKEN") or os.environ.get("HASSIO_TOKEN")
+    for name in ("SUPERVISOR_TOKEN", "HASSIO_TOKEN"):
+        v = os.environ.get(name)
+        if v:
+            return v
+    for name in ("SUPERVISOR_TOKEN", "HASSIO_TOKEN"):
+        for d in S6_ENV_DIRS:
+            p = d / name
+            try:
+                v = p.read_text().strip()
+                if v:
+                    return v
+            except (FileNotFoundError, PermissionError):
+                continue
+    return None
 
 
 def trigger_backup_if_due(state: dict, freq_hours: int) -> None:
