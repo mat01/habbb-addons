@@ -1,0 +1,30 @@
+name: habbb backup sync
+version: "0.1.0"
+slug: habbb_backup_sync
+description: Triggers full HA backups on a schedule and uploads them to the customer-scoped S3 prefix managed by habbb. Credentials are set automatically by habbb finalize.ts — no manual configuration expected.
+url: https://habbb.com
+arch:
+  - aarch64
+  - amd64
+init: false
+hassio_api: true
+hassio_role: backup
+map:
+  - type: backup
+    read_only: true
+options:
+  bucket: ""
+  prefix: ""
+  region: "eu-west-1"
+  aws_access_key_id: ""
+  aws_secret_access_key: ""
+  poll_interval_seconds: 60
+  backup_freq_hours: 24
+schema:
+  bucket: str
+  prefix: str
+  region: str
+  aws_access_key_id: str
+  aws_secret_access_key: password
+  poll_interval_seconds: int(30,3600)
+  backup_freq_hours: int(1,168)
