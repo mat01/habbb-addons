@@ -75,11 +75,21 @@ def save_state(state: dict) -> None:
     os.replace(tmp, STATE_PATH)
 
 
+def supervisor_token() -> str | None:
+    """
+    Supervisor injects SUPERVISOR_TOKEN into addon env when hassio_api: true.
+    Some base images / init chains have historically also exposed it as
+    HASSIO_TOKEN — check both defensively.
+    """
+    return os.environ.get("SUPERVISOR_TOKEN") or os.environ.get("HASSIO_TOKEN")
+
+
 def trigger_backup_if_due(state: dict, freq_hours: int) -> None:
     """Request a full backup via Supervisor API if enough time has passed."""
-    token = os.environ.get("SUPERVISOR_TOKEN")
+    token = supervisor_token()
     if not token:
-        log("WARN: SUPERVISOR_TOKEN missing — skipping scheduled backup trigger")
+        log("WARN: neither SUPERVISOR_TOKEN nor HASSIO_TOKEN in env — "
+            "skipping scheduled backup trigger (check addon's hassio_api:true)")
         return
     now = time.time()
     due_at = state.get("last_backup_trigger", 0) + (freq_hours * 3600 - 60)

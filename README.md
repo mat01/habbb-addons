@@ -1,8 +1,10 @@
 # habbb-addons
 
-Private Home Assistant add-on repository for [habbb](https://habbb.com) — the managed HA service for UK homeowners.
+Home Assistant add-on repository for [habbb](https://habbb.com) — the managed HA service for UK homeowners.
 
-Addons in this repo are installed by `scripts/finalize.ts` during hub provisioning via the Supervisor API (`store/repositories/add` → `store/addons/<slug>/install`). They are not intended for general public consumption.
+Public because Home Assistant's Supervisor clones add-on repositories without authentication. Code is generic S3-upload + backup-scheduling glue; there are no secrets or proprietary integrations in this repo.
+
+Addons are installed automatically by `scripts/finalize.ts` (in the [habbb](https://github.com/mat01/habbb) repo) during hub provisioning, via the Supervisor API (`store/repositories/add` → `store/addons/<slug>/install`). End-user installation via the HA UI is not expected.
 
 ## Current contents
 
