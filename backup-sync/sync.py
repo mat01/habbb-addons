@@ -108,7 +108,22 @@ def supervisor_token() -> str | None:
 
 
 def trigger_backup_if_due(state: dict, freq_hours: int) -> None:
-    """Request a full backup via Supervisor API if enough time has passed."""
+    """
+    Request a full backup via Supervisor API if enough time has passed.
+
+    State persistence is *optimistic*: we mark `last_backup_trigger = now`
+    BEFORE firing the request, so a slow or timed-out HTTP response cannot
+    cause us to re-trigger every poll. A backup that fails to actually
+    start is still skipped for freq_hours — we'd rather under-backup than
+    DDoS Supervisor into creating 40 backups in 24h (which is exactly
+    what 0.1.2 did in the live test).
+
+    Also: the synchronous /backups/new/full endpoint doesn't return until
+    the backup is fully written to /backup/, which can take several
+    minutes on loaded instances. Use a generous timeout (15 min) and
+    accept that the sync loop blocks for that long — upload resumes on
+    the next iteration.
+    """
     token = supervisor_token()
     if not token:
         log("WARN: neither SUPERVISOR_TOKEN nor HASSIO_TOKEN in env — "
@@ -118,8 +133,13 @@ def trigger_backup_if_due(state: dict, freq_hours: int) -> None:
     due_at = state.get("last_backup_trigger", 0) + (freq_hours * 3600 - 60)
     if now < due_at:
         return
+
+    # Optimistic state update — prevents re-triggering on slow/timeout HTTP.
+    state["last_backup_trigger"] = now
+    save_state(state)
+
     name = f"habbb-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
-    log(f"Triggering full backup '{name}' via Supervisor API")
+    log(f"Triggering full backup '{name}' via Supervisor API (generous timeout)")
     body = json.dumps({"name": name, "compressed": True}).encode()
     req = urllib.request.Request(
         SUPERVISOR_BACKUPS_URL,
@@ -131,21 +151,18 @@ def trigger_backup_if_due(state: dict, freq_hours: int) -> None:
         },
     )
     try:
-        # Supervisor returns immediately with the slug; the actual backup
-        # creation is async. Give it a reasonable socket timeout anyway.
-        with urllib.request.urlopen(req, timeout=30) as r:
+        with urllib.request.urlopen(req, timeout=900) as r:
             data = json.loads(r.read())
-            if data.get("result") == "ok":
+            result = data.get("result")
+            if result == "ok":
                 slug = data.get("data", {}).get("slug", "<unknown>")
-                log(f"Backup triggered, Supervisor slug={slug}")
-                state["last_backup_trigger"] = now
-                save_state(state)
+                log(f"Backup completed, Supervisor slug={slug}")
             else:
                 log(f"Backup trigger returned non-ok: {data}")
     except urllib.error.URLError as e:
-        log(f"Backup trigger HTTP error: {e}")
+        log(f"Backup trigger HTTP error (state still advanced): {e}")
     except Exception as e:
-        log(f"Backup trigger unexpected error: {e}")
+        log(f"Backup trigger unexpected error (state still advanced): {e}")
 
 
 def sync_uploads(state: dict, s3, bucket: str, prefix: str) -> None:
